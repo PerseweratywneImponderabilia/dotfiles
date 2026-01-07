@@ -1,0 +1,20 @@
+input {
+    keyboard {
+        repeat-delay 200
+        repeat-rate 25
+
+        xkb {
+          layout "pl"
+        }
+    }
+
+    touchpad {
+        tap
+        dwt
+        drag true
+        natural-scroll
+        accel-speed 0.2
+        scroll-method "two-finger"
+        click-method "clickfinger"
+    }
+}

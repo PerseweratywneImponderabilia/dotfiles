@@ -1,0 +1,69 @@
+workspace "term"
+workspace "browser"
+workspace "code"
+workspace "game"
+
+// `niri msg outputs` to find output names.
+output "eDP-1" {
+    mode "2560x1440@165.003"
+    scale 1.25
+    position x=2560 y=0
+    variable-refresh-rate
+}
+
+cursor {
+    xcursor-theme "breeze_cursors"
+    xcursor-size 48
+
+    hide-when-typing
+    hide-after-inactive-ms 1000
+}
+
+config-notification {
+    disable-failed
+}
+
+gestures {
+    hot-corners {
+        off
+    }
+}
+
+overview {
+    workspace-shadow {
+        off
+    }
+}
+
+
+hotkey-overlay {
+    skip-at-startup
+}
+
+debug {
+    honor-xdg-activation-with-invalid-serial
+}
+
+// Override to disable super+tab
+recent-windows {
+    binds {
+        Alt+Tab         { next-window scope="output"; }
+        Alt+Shift+Tab   { previous-window scope="output"; }
+        Alt+grave       { next-window filter="app-id"; }
+        Alt+Shift+grave { previous-window filter="app-id"; }
+    }
+}
+
+prefer-no-csd
+screenshot-path "~/Pictures/Screenshots/%Y-%m-%d_%H-%M-%S.png"
+spawn-at-startup "bash" "-c" "wl-paste --watch cliphist store &"
+
+include "input.kdl"
+include "dms/env.kdl"
+include "dms/env.kdl"
+include "dms/colors.kdl"
+include "dms/layout.kdl"
+include "dms/alttab.kdl"
+include "dms/binds.kdl"
+include "dms/rules.kdl"
+
