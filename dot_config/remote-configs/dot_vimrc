@@ -1,0 +1,63 @@
+" Make Vim more useful
+set nocompatible
+" Enhance command-line completion
+set wildmenu
+" Change mapleader
+let mapleader=","
+" Respect modeline in files
+set modeline
+set modelines=4
+
+" File type detection (must be top-level, not inside autocmd block)
+filetype plugin indent on
+
+"
+" Display
+"
+syntax on
+set cursorline
+" Hybrid line numbers: relative everywhere, absolute on current line
+set relativenumber
+set number
+set ruler
+set showmode
+set showcmd
+set title
+set laststatus=2
+set scrolloff=3
+
+" Show invisible characters
+set lcs=tab:▸\ ,trail:·,nbsp:_
+set list
+
+"
+" Editing
+"
+set tabstop=2
+set shiftwidth=2
+set backspace=indent,eol,start
+set mouse=a
+set noerrorbells
+set nostartofline
+
+"
+" Search
+"
+set hlsearch
+set incsearch
+set ignorecase
+set smartcase  " case-sensitive only when query contains uppercase
+
+"
+" Mappings
+"
+" Save a file as root (,W)
+noremap <leader>W :w !sudo tee % > /dev/null<CR>
+
+"
+" Autocmds
+"
+if has("autocmd")
+  " Treat .md files as Markdown
+  autocmd BufNewFile,BufRead *.md setlocal filetype=markdown
+endif

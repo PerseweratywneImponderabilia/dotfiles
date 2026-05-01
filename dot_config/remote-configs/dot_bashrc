@@ -1,0 +1,96 @@
+# If not running interactively, don't do anything
+[[ $- != *i* ]] && return
+
+#
+# Vi-like mode
+#
+set -o vi
+
+# Cursor shape: beam in insert, block in normal
+bind 'set vi-ins-mode-string \1\e[6 q\2'
+bind 'set vi-cmd-mode-string \1\e[2 q\2'
+bind 'set show-mode-in-prompt on'
+
+#
+# Aliases
+#
+alias \
+  ls="ls -hN --color=auto --group-directories-first" \
+  ll="ls -lA" \
+  grep="grep --color=auto" \
+  diff="diff --color=auto" \
+  ccat="highlight --out-format=ansi" \
+  ip="ip -color=auto"
+
+alias \
+  bc="bc -ql" \
+  rsync="rsync -vrPl"
+
+alias mv="mv -iv"
+alias cp="cp -riv"
+alias mkdir="mkdir -vp"
+alias rm="rm -vI"
+alias free="free -m"
+alias df="df -h"
+alias sv="sudo nvim"
+alias v="nvim"
+alias g="git"
+alias s="kitten ssh"
+alias dps="docker ps"
+alias dpsa="docker ps -a"
+alias dlog="docker logs -f --tail 555"
+alias tlog="tail -Fn555"
+
+alias ports='sudo ss -tuanp'
+
+alias sudo='sudo '
+
+docker-volumes() {
+  docker inspect --format $'{{range .Mounts}}{{.Type}}\t{{.Source}}\t{{.Destination}}\t{{.Mode}}\t{{if .RW}}rw{{else}}ro{{end}}\n{{end}}' "$1" \
+    | column -t -s $'\t'
+}
+
+#
+# History
+#
+HISTCONTROL=ignoredups:erasedups
+HISTSIZE=5000
+HISTFILESIZE=10000
+HISTIGNORE="&:[ ]*:exit:ls:bg:fg:history:clear"
+export HISTTIMEFORMAT='%F %T '
+shopt -s histappend
+shopt -s cmdhist
+
+#
+# Less / pager
+#
+export LESS='-R'
+export LESS_TERMCAP_mb=$'\E[01;31m'
+export LESS_TERMCAP_md=$'\E[01;38;5;74m'
+export LESS_TERMCAP_me=$'\E[0m'
+export LESS_TERMCAP_se=$'\E[0m'
+export LESS_TERMCAP_so=$'\E[38;5;246m'
+export LESS_TERMCAP_ue=$'\E[0m'
+export LESS_TERMCAP_us=$'\E[04;38;5;146m'
+
+#
+# Prompt
+#
+__prompt_state() {
+  local code=$?
+  if [ "$code" -ne 0 ]; then
+    PROMPT_COLOR="\[\e[31m\]"
+    PROMPT_PREFIX="\[\e[31m\]✗ [$code] "
+  else
+    PROMPT_COLOR="\[\e[36m\]"
+    PROMPT_PREFIX=""
+  fi
+}
+
+__prompt_build() {
+  local RESET="\[\e[0m\]"
+  local YELLOW="\[\e[33m\]"
+  PS1="${PROMPT_PREFIX}${PROMPT_COLOR}\t \u@\h ${YELLOW}\w${PROMPT_COLOR} \$ ${RESET}"
+}
+
+PROMPT_COMMAND="__prompt_state; __prompt_build"
