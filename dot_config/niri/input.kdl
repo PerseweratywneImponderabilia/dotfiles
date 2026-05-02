@@ -5,6 +5,7 @@ input {
 
         xkb {
           layout "pl"
+          options "caps:escape"
         }
     }
 
