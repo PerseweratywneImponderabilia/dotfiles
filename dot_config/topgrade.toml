@@ -1,2 +1,2 @@
 [misc]
-disable = ["containers", "hyprpm", "config_update"]
+disable = ["containers", "hyprpm", "config_update", "chezmoi"]
