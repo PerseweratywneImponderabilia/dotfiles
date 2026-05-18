@@ -31,6 +31,10 @@ else
     set -gx MANPAGER "less -R"
 end
 
+# Work
+set -gx JAVA_HOME /usr/lib/jvm/java-8-oracle
+fish_add_path $JAVA_HOME/bin
+
 # ========================
 # PATH
 # ========================

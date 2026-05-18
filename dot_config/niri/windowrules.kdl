@@ -1,15 +1,18 @@
-// Window rules let you adjust behavior for individual windows.
-// Find more information on the wiki:
-// https://github.com/YaLTeR/niri/wiki/Configuration:-Window-Rules
-// Work around WezTerm's initial configure bug
-// by setting an empty default-column-width.
+spawn-at-startup "niri-float-sticky" "-app-id" "^linphone$" "-title" "^Incoming call"
+
+//window-rule {
+//    match app-id="^linphone$" title="^Incoming call"
+//    open-focused true
+//}
+
 window-rule {
-    match app-id="zen"
-    match app-id="brave-browser"
+    match app-id=r"zen.*"
     open-on-workspace "browser"
     open-maximized true
 }
 
+//: Work around WezTerm's initial configure bug
+// by setting an empty default-column-width.
 window-rule {
     // This regular expression is intentionally made as specific as possible,
     // since this is the default config, and we want no false positives.
@@ -34,8 +37,6 @@ window-rule {
     match app-id=r#"^gnome-calculator$"#
     match app-id=r#"^galculator$"#
     match app-id=r#"^blueman-manager$"#
-    match app-id=r#"^org\.gnome\.Nautilus$"#
-    match app-id=r#"^steam$"#
     match app-id=r#"^xdg-desktop-portal$"#
     open-floating true
 }

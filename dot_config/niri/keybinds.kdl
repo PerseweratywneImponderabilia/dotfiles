@@ -119,6 +119,9 @@ binds {
     Mod+Ctrl+Down { move-column-to-workspace-down; }
     Mod+Ctrl+Up   { move-column-to-workspace-up; }
 
+    Mod+Shift+Page_Up { move-workspace-up; }
+    Mod+Shift+Page_Down { move-workspace-down; }
+
     // === Numbered Workspaces ===
     Mod+1 { focus-workspace 1; }
     Mod+2 { focus-workspace 2; }
@@ -162,6 +165,7 @@ binds {
 
     // === Screenshots ===
     XF86Launch1 { screenshot; }
+    Mod+Shift+S { screenshot; }
     Ctrl+XF86Launch1 { screenshot-screen; }
     Alt+XF86Launch1 { screenshot-window; }
     Print { screenshot; }
