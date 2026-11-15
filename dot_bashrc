@@ -6,22 +6,7 @@ case $- in
       *) return;;
 esac
 
-# XDG and ~/ clean-up variables are exported in ~/.profile (session-wide).
-
-# ---------------------------------------------------------------------------
-# PATH: append ~/.local/bin and all its subdirectories (skip __pycache__),
-# without duplicating entries in nested shells
-# ---------------------------------------------------------------------------
-if [ -d "$HOME/.local/bin" ]; then
-    while IFS= read -r dir; do
-        case ":$PATH:" in
-            *":$dir:"*) ;;
-            *) PATH="$PATH:$dir" ;;
-        esac
-    done < <(find "$HOME/.local/bin" -type d -name __pycache__ -prune -o -type d -print)
-    unset dir
-    export PATH
-fi
+# XDG and ~/ clean-up variables and PATH are set in ~/.profile (session-wide).
 
 # ---------------------------------------------------------------------------
 # History
