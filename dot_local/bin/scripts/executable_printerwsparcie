@@ -1,10 +1,28 @@
 #!/bin/bash
 
 PRINTER_NAME="Drukarka_wsparcie"
-PRINTER_URI="smb://wsparcie@10.71.21.4/Drukarka_wsparcie"
+PRINTER_HOST="10.71.21.4"
+PRINTER_SMB_USER="wsparcie"
 PRINTER_DRIVER="postscript-hp:0/ppd/hplip/HP/hp-laserjet_pro_m304-m305-ps.ppd"
+# Hasło konta SMB jest w Passbolt: "Drukarka wsparcie (SMB)".
+# Można je też podać w zmiennej PRINTER_PASSWORD.
+PASSBOLT_RESOURCE_ID="5431e800-9ddd-4511-8ec1-9d6338472257"
 
 echo "=== Konfiguracja drukarki: $PRINTER_NAME ==="
+
+if [[ -z "${PRINTER_PASSWORD:-}" ]]; then
+  if command -v passbolt >/dev/null; then
+    echo "Pobieranie hasła z Passbolt..."
+    PRINTER_PASSWORD=$(passbolt get resource --id "$PASSBOLT_RESOURCE_ID" -j |
+      jq -r '.password // .Password // empty')
+  else
+    read -rsp "Hasło SMB dla $PRINTER_SMB_USER: " PRINTER_PASSWORD </dev/tty; echo
+  fi
+fi
+[[ -n "$PRINTER_PASSWORD" ]] || { echo "Brak hasła SMB — przerywam." >&2; exit 1; }
+# Hasło w URI musi być zakodowane (np. przecinek -> %2C).
+PRINTER_URI="smb://${PRINTER_SMB_USER}:$(jq -rn --arg p "$PRINTER_PASSWORD" '$p|@uri')@${PRINTER_HOST}/${PRINTER_NAME}"
+unset PRINTER_PASSWORD
 
 echo "[1/6] Instalacja wymaganych pakietów..."
 sudo apt update
