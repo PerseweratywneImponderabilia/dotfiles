@@ -1,0 +1,3 @@
+# Pin the target umask so file modes do not depend on how chezmoi was started
+# (Ubuntu login sessions use 0002; ssh/sudo sessions may use 0022).
+umask = 0o002
