@@ -32,14 +32,16 @@ else
 end
 
 # Work
-set -gx JAVA_HOME /usr/lib/jvm/java-8-oracle
+set -gx JAVA_HOME /usr/lib/jvm/java-21-openjdk-amd64
 fish_add_path $JAVA_HOME/bin
 
 # ========================
 # PATH
 # ========================
-fish_add_path $XDG_DATA_HOME/cargo/bin
 fish_add_path $HOME/.local/bin
+fish_add_path $HOME/.local/bin/scripts
+fish_add_path $HOME/.local/applications/dcm4che-5/bin
+fish_add_path $XDG_DATA_HOME/cargo/bin
 
 # ========================
 # Flatpak
@@ -69,25 +71,16 @@ abbr sv "sudo $EDITOR"
 alias v="$EDITOR"
 alias g="git"
 alias s="kitten ssh"
-alias dps="docker ps"
-alias dpsa="docker ps -a"
-alias dlog="docker logs -f --tail 333"
-alias tlog="tail -Fn333"
 alias jctl="journalctl -p 3 -xb"
-alias psmem="ps auxf | sort -nr -k 4"
 alias tb="nc termbin.com 9999"
-alias tarnow="tar -acf"
-alias untar="tar -zxvf"
-alias bgcustom="printf '\033]11;#1a1a1a\007'"
-alias bgdefault="printf '\033]11;#000000\007'"
 
 if command -vq eza
-    alias ls="eza -Al --color=always --group-directories-first --icons"
-    alias ll="eza -lA --color=always --group-directories-first --icons"
-    alias lt="eza -aT --color=always --group-directories-first --icons"
+    alias ls="eza -Al --color=always --group-directories-first --icons=auto"
+    alias ll="eza -lA --color=always --group-directories-first --icons=auto"
+    alias lt="eza -aT --color=always --group-directories-first --icons=auto"
 else
-    alias ls="ls --color=auto --group-directories-first"
-    alias ll="ls -lA --color=auto --group-directories-first"
+    alias ls="ls --color=auto"
+    alias ll="ls -lA --color=auto"
     alias lt="find . -print | sed -e 's;[^/]*/;|____;g;s;____|; |;g'"
 end
 
@@ -109,6 +102,20 @@ end
 # ========================
 # Keybindings
 # ========================
+
+# Set VI mode for the prompt indicator
+fish_vi_key_bindings
+
+function fish_user_key_bindings
+    # Apply default (Emacs) bindings to the relevant modes
+    for mode in default insert visual
+        fish_default_key_bindings -M $mode
+    end
+    # Then apply vi bindings without erasing the ones above
+    fish_vi_key_bindings --no-erase
+end
+
+# !! abbr last comand
 function __history_previous_command
     switch (commandline -t)
         case "!"
@@ -119,6 +126,7 @@ function __history_previous_command
     end
 end
 
+# !$ abbr last argument
 function __history_previous_command_arguments
     switch (commandline -t)
         case "!"
@@ -137,27 +145,3 @@ else
     bind '$' __history_previous_command_arguments
 end
 
-# Fix airpods being recognized as a headset
-#function reconnect-airpods
-#    bluetoothctl disconnect 28:2D:7F:DC:67:DD
-#    sleep 1
-#    bluetoothctl connect 28:2D:7F:DC:67:DD
-#    sleep 2
-#    systemctl --user restart wireplumber pipewire pipewire-pulse
-#    sleep 3
-
-#    # Retry setting profile multiple times
-#    for i in (seq 1 5)
-#        if pactl set-card-profile bluez_card.28_2D_7F_DC_67_DD a2dp-sink
-#            echo "Successfully set A2DP profile"
-#            sleep 1
-#            pactl set-default-sink bluez_output.28_2D_7F_DC_67_DD.1
-#            echo "Set as default sink"
-#            return 0
-#        end
-#        echo "Attempt $i failed, retrying in 1 second..."
-#        sleep 1
-#    end
-
-#    echo "Failed to set A2DP profile after 5 attempts"
-#end

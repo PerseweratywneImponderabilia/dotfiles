@@ -1,0 +1,156 @@
+#!/bin/bash
+# Launch Exhibeon 2 (Java Web Start) against a chosen facility server.
+#
+# The Java security policy only trusts the host name "expacs", so this
+# script points "expacs" in /etc/hosts at the IP of the given server
+# (replacing any existing "expacs" entry) and then starts javaws.
+#
+# Usage: exhibeon [-n] <host|IP>      e.g. exhibeon pazros
+#   -n   dry run: show the /etc/hosts change, do not write it or launch
+#
+# Environment:
+#   JAVAWS      javaws binary (default: Oracle JDK 8 javaws; Java 21 has none)
+#   HOSTS_FILE  hosts file to edit (default: /etc/hosts)
+#   EXCEPTION_SITES  Java Exception Site List
+#               (default: ~/.java/deployment/security/exception.sites)
+
+set -euo pipefail
+
+ALIAS="expacs"
+JNLP_URL="http://${ALIAS}/jnlp/Exhibeon/Exhibeon.jnlp"
+JAVA8_HOME="/usr/lib/jvm/jdk1.8.0_202"
+JAVAWS="${JAVAWS:-$JAVA8_HOME/bin/javaws}"
+HOSTS_FILE="${HOSTS_FILE:-/etc/hosts}"
+# Java Web Start blocks Exhibeon (expired-timestamp signature, all-permissions)
+# unless its site is on the Exception Site List.
+EXCEPTION_SITES="${EXCEPTION_SITES:-$HOME/.java/deployment/security/exception.sites}"
+EXCEPTION_SITE="http://${ALIAS}"
+tmp=""   # temp copy of the rewritten hosts file; global so the EXIT trap sees it
+
+die() { echo "exhibeon: $*" >&2; exit 1; }
+
+usage() {
+    echo "Usage: $(basename "$0") [-n] <host|IP>   (e.g. $(basename "$0") pazros)" >&2
+    exit 2
+}
+
+is_ipv4() {
+    local IFS=. o
+    local -a parts
+    [[ $1 =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || return 1
+    read -ra parts <<<"$1"
+    for o in "${parts[@]}"; do (( 10#$o <= 255 )) || return 1; done
+}
+
+# Print the hosts file ($2) with every "expacs" name removed and a single
+# "<ip> expacs" entry placed where the first one was (or appended at the end).
+# Lines left with no host names are dropped; comments are kept untouched.
+rewrite_hosts() {
+    local ip=$1 file=$2
+    awk -v ip="$ip" -v alias="$ALIAS" '
+        function emit_entry() { if (!done) { print ip " " alias; done = 1 } }
+        {
+            line = $0; comment = ""
+            if ((c = index(line, "#")) > 0) { comment = substr(line, c); line = substr(line, 1, c - 1) }
+            n = split(line, f, /[ \t]+/)
+            # split() yields an empty first field for leading whitespace
+            start = (f[1] == "") ? 2 : 1
+            found = 0; kept = ""
+            for (i = start + 1; i <= n; i++) {
+                if (f[i] == "") continue
+                if (f[i] == alias) { found = 1; continue }
+                kept = kept " " f[i]
+            }
+            if (!found) { print; next }
+            emit_entry()
+            if (kept != "") print f[start] kept (comment != "" ? " " comment : "")
+        }
+        END { emit_entry() }
+    ' "$file"
+}
+
+# Make sure "http://expacs" is on the Java Exception Site List.
+ensure_exception_site() {
+    local dry_run=$1
+    if [[ -f $EXCEPTION_SITES ]] &&
+       grep -qxE "[[:space:]]*${EXCEPTION_SITE}/?[[:space:]]*" "$EXCEPTION_SITES"; then
+        echo "Exception Site List already contains $EXCEPTION_SITE"
+        return 0
+    fi
+    if (( dry_run )); then
+        echo "(dry run: would add $EXCEPTION_SITE to $EXCEPTION_SITES)"
+        return 0
+    fi
+    mkdir -p "$(dirname "$EXCEPTION_SITES")"
+    # add a newline first if the file does not end with one
+    if [[ -s $EXCEPTION_SITES && -n $(tail -c 1 "$EXCEPTION_SITES") ]]; then
+        echo >>"$EXCEPTION_SITES"
+    fi
+    echo "$EXCEPTION_SITE" >>"$EXCEPTION_SITES"
+    echo "Added $EXCEPTION_SITE to $EXCEPTION_SITES"
+}
+
+main() {
+    local dry_run=0
+    while getopts ":nh" opt; do
+        case $opt in
+            n) dry_run=1 ;;
+            *) usage ;;
+        esac
+    done
+    shift $((OPTIND - 1))
+    [[ $# -eq 1 ]] || usage
+    local target=$1
+
+    local ip
+    if is_ipv4 "$target"; then
+        ip=$target
+    else
+        ip=$(getent ahostsv4 "$target" | awk 'NR == 1 { print $1 }') || true
+        [[ -n $ip ]] || die "cannot resolve host '$target'"
+    fi
+    is_ipv4 "$ip" || die "'$target' resolved to an invalid address '$ip'"
+    [[ $ip != 127.* ]] || die "'$target' resolved to loopback address $ip"
+    echo "Target: $target -> $ip"
+
+    [[ -r $HOSTS_FILE ]] || die "cannot read $HOSTS_FILE"
+    tmp=$(mktemp)
+    trap 'rm -f "$tmp"' EXIT
+    rewrite_hosts "$ip" "$HOSTS_FILE" >"$tmp"
+
+    if cmp -s "$tmp" "$HOSTS_FILE"; then
+        echo "$HOSTS_FILE already maps $ALIAS -> $ip"
+    else
+        echo "Updating $HOSTS_FILE:"
+        diff -u "$HOSTS_FILE" "$tmp" | tail -n +3 || true
+        if (( dry_run )); then
+            echo "(dry run: $HOSTS_FILE not changed)"
+        else
+            # cp onto the existing file keeps its owner, mode and inode
+            sudo cp -p "$HOSTS_FILE" "$HOSTS_FILE.exhibeon.bak"
+            sudo cp "$tmp" "$HOSTS_FILE"
+            local now
+            now=$(getent ahostsv4 "$ALIAS" | awk 'NR == 1 { print $1 }') || true
+            [[ $now == "$ip" ]] || die "$ALIAS resolves to '${now:-nothing}' instead of $ip"
+        fi
+    fi
+    rm -f "$tmp"
+
+    ensure_exception_site "$dry_run"
+
+    (( dry_run )) && { echo "(dry run: would run $JAVAWS -verbose $JNLP_URL)"; return 0; }
+
+    [[ -x $JAVAWS ]] || die "javaws not found at $JAVAWS (set JAVAWS=...)"
+    if command -v curl >/dev/null &&
+       ! curl -fsS -o /dev/null --max-time 5 "$JNLP_URL"; then
+        echo "exhibeon: warning: $JNLP_URL is not reachable, launching anyway" >&2
+    fi
+
+    echo "Launching: $JAVAWS -verbose $JNLP_URL"
+    export JAVA_HOME="$JAVA8_HOME"
+    exec "$JAVAWS" -verbose "$JNLP_URL"
+}
+
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+    main "$@"
+fi

@@ -1,0 +1,258 @@
+#!/bin/sh
+# archive - extract or create archives
+#
+#   archive [-x] [-c] [-F] [-v] ARCHIVE...                     extract
+#   archive [-z] [-f FORMAT] [-l LEVEL] [-o OUTPUT] [-F] [-v] PATH   compress
+#
+# Without -x/-z the mode is guessed: a directory argument is compressed,
+# anything else is extracted. Options must come before file names.
+
+format="zip"
+level=5
+verbose=false
+extracthere=false
+force=false
+output=""
+mode=""
+
+err() { printf '%s\n' "$*" >&2; }
+die() { err "$@"; exit 1; }
+
+show_help() {
+  cat <<EOF
+Usage: ${0##*/} [options] file_or_dir ...
+
+Mode (guessed when omitted: directory -> compress, otherwise extract):
+  -x           Extract archive(s)
+  -z           Compress one file or directory
+
+Extraction:
+  -c           Extract into the current directory (default: a new directory
+               named after the archive, next to the archive)
+
+Compression:
+  -f FORMAT    zip, 7z, tar, tar.gz|tgz, tar.bz2, tar.xz, tar.zst (default: zip)
+  -l LEVEL     Compression level 0-9 (default: 5)
+  -o OUTPUT    Output file name (default: NAME.FORMAT in the current directory)
+
+Common:
+  -F           Overwrite an existing output file
+  -v           Verbose output
+  -h           Show this help
+EOF
+  exit 0
+}
+
+# need CMD - fail (return 1) if CMD is missing
+need() {
+  command -v "$1" >/dev/null 2>&1 && return 0
+  err "Error: required command '$1' not found."
+  return 1
+}
+
+# Print the first 7-Zip binary found
+sevenzip() {
+  for c in 7z 7zz 7za; do
+    command -v "$c" >/dev/null 2>&1 && { printf '%s\n' "$c"; return 0; }
+  done
+  err "Error: 7-Zip (7z, 7zz or 7za) not found."
+  return 1
+}
+
+# Archive name without its archive extension(s)
+strip_ext() {
+  case $1 in
+    *.tar.*) printf '%s\n' "${1%.tar.*}" ;;
+    *) printf '%s\n' "${1%.*}" ;;
+  esac
+}
+
+while getopts "xczf:l:o:Fvh" opt; do
+  case "$opt" in
+    x) [ "$mode" = compress ] && die "Error: -x and -z are mutually exclusive."; mode="extract" ;;
+    z) [ "$mode" = extract ] && die "Error: -x and -z are mutually exclusive."; mode="compress" ;;
+    c) extracthere=true ;;
+    f) format=$OPTARG ;;
+    l)
+      case $OPTARG in
+        [0-9]) level=$OPTARG ;;
+        *) die "Error: compression level must be 0-9." ;;
+      esac
+      ;;
+    o) output=$OPTARG ;;
+    F) force=true ;;
+    v) verbose=true ;;
+    h) show_help ;;
+    *) die "Try '${0##*/} -h' for help." ;;
+  esac
+done
+shift $((OPTIND - 1))
+
+[ "$#" -gt 0 ] || show_help
+
+if [ -z "$mode" ]; then
+  if [ -d "$1" ]; then mode="compress"; else mode="extract"; fi
+fi
+
+# Verbosity switches for the individual tools (empty = flag omitted)
+if $verbose; then
+  tv="v"; zq=""; rq=""; sz=""
+else
+  tv=""; zq="-q"; rq="-idq"; sz="-bso0 -bsp0"
+fi
+
+# --- extraction --------------------------------------------------------------
+
+# Runs in the destination directory; $archive is absolute.
+run_extract() {
+  case $kind in
+    tar) tar "-x${tv}f" "$archive" ;;
+    zip) unzip $zq "$archive" ;;
+    7z)  "$sz_bin" x $sz "$archive" ;;
+    rar) unrar x $rq "$archive" ;;
+    cab) cabextract $zq "$archive" ;;
+  esac
+}
+
+extract_one() {
+  src=$1
+  [ -f "$src" ] || { err "Warning: '$src' not found, skipping."; return 1; }
+
+  archive="$(cd "$(dirname "$src")" && pwd)/$(basename "$src")"
+  name=$(basename "$archive")
+
+  # Classify and check dependencies before touching the filesystem.
+  single=""
+  case $name in
+    *.tar|*.tar.*|*.tgz|*.tbz|*.tbz2|*.txz|*.tzst)
+      kind=tar; need tar || return 1 ;;
+    *.zip) kind=zip; need unzip || return 1 ;;
+    *.7z)  kind=7z; sz_bin=$(sevenzip) || return 1 ;;
+    *.rar) kind=rar; need unrar || return 1 ;;
+    *.exe)
+      if sz_bin=$(sevenzip 2>/dev/null); then kind=7z
+      else kind=cab; need cabextract || return 1; fi ;;
+    *.gz|*.Z)    single=gzip ;;
+    *.bz2)       single=bzip2 ;;
+    *.xz|*.lzma) single=xz ;;
+    *.zst)       single=zstd ;;
+    *) err "Warning: unsupported archive format: '$src', skipping."; return 1 ;;
+  esac
+
+  # Single compressed file: decompress to a file, keep the original.
+  if [ -n "$single" ]; then
+    need "$single" || return 1
+    if $extracthere; then dest=$PWD; else dest=$(dirname "$archive"); fi
+    out="$dest/$(strip_ext "$name")"
+    if [ -e "$out" ] && ! $force; then
+      err "Error: '$out' already exists (use -F to overwrite), skipping."
+      return 1
+    fi
+    if "$single" -dc -- "$archive" > "$out.part" && mv -f -- "$out.part" "$out"; then
+      $verbose && printf '%s -> %s\n' "$src" "$out"
+      return 0
+    fi
+    rm -f -- "$out.part"
+    err "Error: extraction failed: '$src'"
+    return 1
+  fi
+
+  if $extracthere; then
+    dest=.
+  else
+    dest="$(dirname "$archive")/$(strip_ext "$name")"
+    mkdir -p -- "$dest" || { err "Error: cannot create '$dest'."; return 1; }
+  fi
+
+  if ! (cd "$dest" && run_extract); then
+    $extracthere || rmdir -- "$dest" 2>/dev/null   # drop it only if empty
+    err "Error: extraction failed: '$src'"
+    return 1
+  fi
+  $verbose && printf '%s -> %s\n' "$src" "$dest"
+  return 0
+}
+
+extract() {
+  failed=0
+  for a in "$@"; do
+    extract_one "$a" || failed=$((failed + 1))
+  done
+  [ "$failed" -eq 0 ] || die "$failed of $# archive(s) failed."
+}
+
+# --- compression -------------------------------------------------------------
+
+compress() {
+  [ "$#" -eq 1 ] || die "Error: compress takes exactly one file or directory."
+  input=$1
+  [ -e "$input" ] || die "Error: input '$input' not found."
+
+  # Absolute path, then split into parent + name so the archive holds only NAME/.
+  if [ -d "$input" ]; then
+    abs=$(cd "$input" && pwd) || die "Error: cannot access '$input'."
+  else
+    abs="$(cd "$(dirname "$input")" && pwd)/$(basename "$input")"
+  fi
+  [ "$abs" != / ] || die "Error: refusing to archive '/'."
+  parent=$(dirname "$abs")
+  name=$(basename "$abs")
+
+  case $format in
+    zip|7z|tar|tar.gz|tgz|tar.bz2|tar.xz|tar.zst) ;;
+    *) die "Error: unsupported format '$format'." ;;
+  esac
+
+  [ -n "$output" ] || output="$name.$format"
+  case $output in /*) ;; *) output="$PWD/$output" ;; esac
+
+  case $output in
+    "$abs"/*) die "Error: output '$output' would be inside the input; use -o to put it elsewhere." ;;
+  esac
+  if [ -e "$output" ]; then
+    [ -f "$output" ] || die "Error: '$output' exists and is not a regular file."
+    $force || die "Error: '$output' already exists (use -F to overwrite)."
+    rm -f -- "$output" || die "Error: cannot remove '$output'."
+  fi
+
+  # gzip and bzip2 have no level 0; zstd's 0 means "default".
+  lvl1=$level; [ "$lvl1" -ge 1 ] || lvl1=1
+
+  case $format in
+    zip)
+      need zip || exit 1
+      (cd "$parent" && zip -r "-$level" $zq "$output" "$name")
+      ;;
+    7z)
+      sz_bin=$(sevenzip) || exit 1
+      (cd "$parent" && "$sz_bin" a "-mx=$level" $sz "$output" "$name")
+      ;;
+    tar)
+      need tar || exit 1
+      tar "-c${tv}f" "$output" -C "$parent" -- "$name"
+      ;;
+    tar.gz|tgz)
+      need tar && need gzip || exit 1
+      tar "-c${tv}f" "$output" -I "gzip -$lvl1" -C "$parent" -- "$name"
+      ;;
+    tar.bz2)
+      need tar && need bzip2 || exit 1
+      tar "-c${tv}f" "$output" -I "bzip2 -$lvl1" -C "$parent" -- "$name"
+      ;;
+    tar.xz)
+      need tar && need xz || exit 1
+      tar "-c${tv}f" "$output" -I "xz -$level" -C "$parent" -- "$name"
+      ;;
+    tar.zst)
+      need tar && need zstd || exit 1
+      tar "-c${tv}f" "$output" -I "zstd -q -$lvl1" -C "$parent" -- "$name"
+      ;;
+  esac || { rm -f -- "$output"; die "Error: compression failed."; }
+
+  printf 'Created archive: %s\n' "$output"
+}
+
+case $mode in
+  extract) extract "$@" ;;
+  compress) compress "$@" ;;
+esac

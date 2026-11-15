@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+# pbpass — find a Passbolt password by title fragment and print or copy it.
+# Usage: pbpass [-c|--copy] [-r|--refresh] <title fragment>
+# The list of names (no secrets) is cached in $XDG_RUNTIME_DIR (RAM, 0600)
+# for 1 hour; a miss or --refresh re-fetches it.
+set -euo pipefail
+
+usage() { echo "Usage: ${0##*/} [-c|--copy] [-r|--refresh] <title fragment>" >&2; exit 2; }
+
+copy=0
+refresh=0
+query=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -c|--copy) copy=1 ;;
+    -r|--refresh) refresh=1 ;;
+    -h|--help) usage ;;
+    --) shift; query="${*}"; break ;;
+    -*) echo "Unknown option: $1" >&2; usage ;;
+    *) query="${query:+$query }$1" ;;
+  esac
+  shift
+done
+[[ -n "$query" ]] || usage
+
+# Is a non-empty userPassword stored in the passbolt config? (value not read)
+config_has_password() {
+  local cfg="${XDG_CONFIG_HOME:-$HOME/.config}/go-passbolt-cli/go-passbolt-cli.toml"
+  [[ -r "$cfg" ]] || return 1
+  grep -qiE "^[[:space:]]*userpassword[[:space:]]*=[[:space:]]*(\"[^\"]+\"|'[^']+')" "$cfg"
+}
+
+# Ask for the passphrase once (instead of once per passbolt call),
+# unless it comes from the environment or the config file.
+if [[ -z "${USERPASSWORD:-}" ]] && ! config_has_password; then
+  read -rsp "Passbolt passphrase: " USERPASSWORD </dev/tty; echo >&2
+  export USERPASSWORD
+fi
+
+cache_dir="${XDG_RUNTIME_DIR:-/tmp}"
+cache="$cache_dir/pbpass-$(id -u).json"
+cache_ttl=3600
+
+fetch_list() {
+  local tmp
+  tmp=$(umask 077; mktemp "$cache_dir/pbpass.XXXXXX")
+  if passbolt list resource -c id -c name -c username -c uri -j |
+     jq -c '[ .[] | {id: (.id // .ID), name: (.name // .Name // ""),
+                     username: (.username // .Username // ""),
+                     uri: (.uri // .URI // "")} ]' >"$tmp"; then
+    mv -f "$tmp" "$cache"
+  else
+    rm -f "$tmp"; return 1
+  fi
+}
+
+cache_fresh() {
+  [[ -s "$cache" && -O "$cache" ]] &&
+    (( $(date +%s) - $(stat -c %Y "$cache") < cache_ttl ))
+}
+
+# Match case-insensitively as a literal substring.
+find_matches() {
+  jq -c --arg q "$query" '[ .[]
+      | select(.name | ascii_downcase | contains($q | ascii_downcase)) ]
+    | sort_by(.name)' "$cache"
+}
+
+fetched=0
+if (( refresh )) || ! cache_fresh; then fetch_list; fetched=1; fi
+matches=$(find_matches)
+# Cached list may predate the resource: re-fetch once on a miss.
+if [[ "$matches" == "[]" ]] && (( ! fetched )); then
+  fetch_list; matches=$(find_matches)
+fi
+
+count=$(jq length <<<"$matches")
+if (( count == 0 )); then
+  echo "No resource matching: $query" >&2; exit 1
+elif (( count == 1 )); then
+  idx=0
+else
+  jq -r 'to_entries[] | "\(.key + 1))\t\(.value.name)\t\(.value.username)\t\(.value.uri)"' \
+    <<<"$matches" | column -t -s $'\t' >&2
+  read -rp "Pick [1-$count]: " pick </dev/tty
+  [[ "$pick" =~ ^[0-9]+$ ]] && (( pick >= 1 && pick <= count )) || { echo "Invalid choice" >&2; exit 1; }
+  idx=$((pick - 1))
+fi
+
+id=$(jq -r ".[$idx].id" <<<"$matches")
+name=$(jq -r ".[$idx].name" <<<"$matches")
+user=$(jq -r ".[$idx].username" <<<"$matches")
+[[ "$id" =~ ^[0-9a-fA-F-]{36}$ ]] || { echo "Unexpected resource id: $id" >&2; exit 1; }
+
+password=$(passbolt get resource --id "$id" -j | jq -r '.password // .Password // empty')
+[[ -n "$password" ]] || { echo "Could not read password for: $name" >&2; exit 1; }
+
+if (( copy )); then
+  if command -v wl-copy >/dev/null && [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
+    printf '%s' "$password" | wl-copy
+    clear_cmd='wl-copy --clear'; read_cmd='wl-paste -n'
+  elif command -v xclip >/dev/null; then
+    printf '%s' "$password" | xclip -selection clipboard
+    clear_cmd='printf "" | xclip -selection clipboard'; read_cmd='xclip -o -selection clipboard'
+  elif command -v xsel >/dev/null; then
+    printf '%s' "$password" | xsel -ib
+    clear_cmd='xsel -cb'; read_cmd='xsel -ob'
+  else
+    echo "No clipboard tool (wl-copy, xclip, xsel) found" >&2; exit 1
+  fi
+  echo "Copied: $name ($user) — clipboard clears in 45 s" >&2
+  # Clear after 45 s, but only if the clipboard still holds this password.
+  ( sleep 45
+    [[ "$(eval "$read_cmd" 2>/dev/null)" == "$password" ]] && eval "$clear_cmd"
+  ) >/dev/null 2>&1 &
+  disown
+else
+  echo "$name ($user)" >&2
+  printf '%s\n' "$password"
+fi

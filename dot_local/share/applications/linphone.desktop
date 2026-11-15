@@ -1,0 +1,15 @@
+[Desktop Entry]
+Categories=Network;Telephony;
+Comment=A libre SIP client
+Exec=linphone %u
+GenericName=SIP Phone
+Icon=linphone
+MimeType=x-scheme-handler/sip-linphone;x-scheme-handler/sips-linphone;x-scheme-handler/linphone-sip;x-scheme-handler/linphone-sips;x-scheme-handler/sip;x-scheme-handler/sips;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/linphone-config;
+Name=Linphone
+NoDisplay=false
+PrefersNonDefaultGPU=false
+StartupNotify=true
+Terminal=false
+Type=Application
+X-KDE-SubstituteUID=false
+X-PulseAudio-Properties=media.role=phone

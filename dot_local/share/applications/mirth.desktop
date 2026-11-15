@@ -1,0 +1,15 @@
+[Desktop Entry]
+Categories=Network;MedicalSoftware;
+Comment=Manage Mirth Connect instances
+Exec=env GDK_BACKEND=x11 mirth-launcher
+GenericName=HL7 Integration Engine
+Icon=mirth
+Name=Mirth Connect Administrator
+NoDisplay=false
+PrefersNonDefaultGPU=false
+StartupNotify=true
+StartupWMClass=mirth
+Terminal=false
+Type=Application
+Version=1.0
+X-KDE-SubstituteUID=false
