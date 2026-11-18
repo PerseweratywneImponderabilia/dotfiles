@@ -93,3 +93,5 @@ fi
 # Custom 
 # ---------------------------------------------------------------------------
 
+# fzf key bindings and completion (ctrl-t, ctrl-r, alt-c); built into fzf >= 0.48
+command -v fzf >/dev/null && eval "$(fzf --bash)"
