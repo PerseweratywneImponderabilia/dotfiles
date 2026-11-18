@@ -145,3 +145,9 @@ else
     bind '$' __history_previous_command_arguments
 end
 
+# ========================
+# Integrations
+# ========================
+
+fzf --fish | source
+zoxide init fish | source

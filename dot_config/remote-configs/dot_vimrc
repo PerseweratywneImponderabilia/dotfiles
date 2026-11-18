@@ -1,3 +1,7 @@
+" Sane Defaults
+unlet! skip_defaults_vim
+source $VIMRUNTIME/defaults.vim
+
 " Make Vim more useful
 set nocompatible
 " Enhance command-line completion
@@ -51,6 +55,15 @@ set smartcase  " case-sensitive only when query contains uppercase
 "
 " Mappings
 "
+" Keep search matches centered on screen
+nnoremap n nzz
+nnoremap N Nzz
+nnoremap * *zz
+nnoremap # #zz
+nnoremap g* g*zz
+nnoremap g# g#zz
+cnoremap <expr> <CR> getcmdtype() =~ '[/?]' ? "\<CR>zz" : "\<CR>"
+
 " Save a file as root (,W)
 noremap <leader>W :w !sudo tee % > /dev/null<CR>
 
