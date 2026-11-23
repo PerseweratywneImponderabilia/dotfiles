@@ -64,6 +64,7 @@ abbr rm "rm -vI"
 abbr free "free -m"
 abbr df "df -h"
 abbr sv "sudo $EDITOR"
+abbr cs "cd ~/.local/sources && claude"  # Claude Code for support work
 
 # ========================
 # Aliases
