@@ -50,6 +50,13 @@ docker-volumes() {
     | column -t -s $'\t'
 }
 
+# Tab completes container names, running and stopped (works without bash-completion)
+_docker_containers() {
+  [[ $COMP_CWORD -eq 1 ]] || return
+  COMPREPLY=($(compgen -W "$(docker ps -a --format '{{.Names}}' 2>/dev/null)" -- "$2"))
+}
+complete -F _docker_containers docker-volumes dlog
+
 #
 # History
 #
