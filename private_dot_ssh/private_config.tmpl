@@ -1,0 +1,8 @@
+# Managed by chezmoi (dotfiles). User comes from sshUser in ~/.config/chezmoi/chezmoi.toml.
+Host *
+    SetEnv TERM=xterm-256color
+{{- with (index . "sshUser") }}
+    User {{ . }}
+{{- end }}
+    HostKeyAlgorithms +ssh-rsa
+    PubkeyAcceptedAlgorithms +ssh-rsa

@@ -1,3 +1,7 @@
 # Pin the target umask so file modes do not depend on how chezmoi was started
 # (Ubuntu login sessions use 0002; ssh/sudo sessions may use 0022).
 umask = 0o002
+
+[data]
+    # Login on the work servers (differs per person). Empty: no User line in ~/.ssh/config.
+    sshUser = {{ promptStringOnce . "sshUser" "SSH login for the work servers (e.g. j.kowalski; empty to skip)" | quote }}
