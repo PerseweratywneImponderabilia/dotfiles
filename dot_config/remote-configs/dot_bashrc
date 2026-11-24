@@ -45,8 +45,9 @@ alias ports='sudo ss -tuanp'
 
 alias sudo='sudo '
 
+# Empty fields print as '-': column -t merges adjacent tabs
 docker-volumes() {
-  docker inspect --format $'{{range .Mounts}}{{.Type}}\t{{.Source}}\t{{.Destination}}\t{{.Mode}}\t{{if .RW}}rw{{else}}ro{{end}}\n{{end}}' "$1" \
+  docker inspect --format $'{{range .Mounts}}{{.Type}}\t{{or .Source "-"}}\t{{.Destination}}\t{{or .Mode "-"}}\t{{if .RW}}rw{{else}}ro{{end}}\n{{end}}' "$1" \
     | column -t -s $'\t'
 }
 
